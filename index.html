@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;600&display=swap" rel="stylesheet">
+
+<title>Delimitation Reality Dashboard</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body {
+  margin:0;
+  font-family: Arial, Helvetica, sans-serif;
+  display:flex;
+  height:100vh;
+  overflow:hidden;
+}
+
+body.lang-te {
+  font-family: "Noto Sans Telugu", "Noto Sans", Arial, sans-serif;
+}
+
+/* LEFT PANEL */
+.panel{
+  width:360px;
+  background:rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding:14px;
+  border-radius:0;
+  box-shadow:2px 0 18px rgba(0,0,0,0.15);
+  border-right:1px solid rgba(0,0,0,0.06);
+  font-size:13px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ================== TELUGU MODE ================== */
+body.lang-te .panel {
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+}
+body.lang-te b { display: inline-block; margin-bottom: 4px; }
+body.lang-te .small { font-size: 12px; line-height: 1.6; }
+
+/* ================== MOBILE APP LAYOUT ================== */
+@media (max-width: 768px){
+  body { flex-direction: column; }
+  #map { height: 100vh; width: 100%; position: absolute; top:0; left:0; }
+  
+  .panel {
+    position: fixed;   
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 75vh;
+    padding: 25px 14px 14px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 20px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transform: translateY(calc(75vh - 80px));
+    transition: transform 0.3s ease;
+    touch-action: pan-y;
+  }
+  .panel-handle{
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 5px;
+    background: #bbb;
+    border-radius: 10px;
+  }
+  #toggleBtn { display: none; }
+}
+
+#toggleBtn{
+  position: fixed;        
+  top: 20px; left: 10px;             
+  width: 36px; height: 36px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 50%;
+  display: flex;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 9999;
+}
+
+.row{margin-top:6px}
+.small{font-size:11px; opacity:0.8}
+hr{border:none;border-top:1px solid #eee;margin:10px 0}
+.legend{font-size:11px; margin-top:8px}
+.badge{display:inline-block; padding:2px 6px; border-radius:6px; background:#f2f2f2}
+
+button, select {
+  margin-top:8px; width:100%; padding:8px; border-radius:8px;
+  border:1px solid #ddd; background:#fafafa; cursor:pointer;
+}
+button:hover{background:#f0f0f0}
+
+/* 🔥 BASE MAP (ALL DEVICES) */
+#map { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    transition: left 0.3s ease-in-out; 
+}
+
+/* 🔥 DESKTOP LAYOUT WITH COLLAPSE LOGIC */
+@media (min-width: 768px){
+  #panel{
+    position: absolute; top: 0; left: 0; bottom: auto;
+    width: 320px; height: 100vh; overflow-y: scroll;
+    z-index: 1000; border-radius: 0;
+    transform: translateX(0) !important; 
+  }
+  #map{ left: 320px; }
+  
+  body.panel-collapsed #panel { transform: translateX(-100%) !important; }
+  body.panel-collapsed #map { left: 0; }
+}
+
+/* 🔥 SMOOTH ANIMATION */
+#map { will-change: left; }
+#panel { transition: transform 0.3s ease; will-change: transform; }
+
+.state-label div, .ut-label div{
+  pointer-events:none; white-space:nowrap; display:block; padding:1px 2px;
+  text-shadow: 0 0 4px rgba(255,255,255,0.9);
+}
+
+/* ✨ NEW FEATURE: TOP MOVERS POLYGON ANIMATION ✨ */
+.poly-gainer {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: polyPulseGainer 1.5s infinite alternate ease-in-out;
+  stroke: #00e676 !important; /* Override Leaflet inline path styles */
+  stroke-width: 4px !important;
+}
+.poly-loser {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: polyPulseLoser 1.5s infinite alternate ease-in-out;
+  stroke: #2196f3 !important;
+  stroke-width: 4px !important;
+}
+@keyframes polyPulseGainer {
+  0% { filter: drop-shadow(0 0 2px rgba(0,200,83,0.5)); fill-opacity: 0.6; }
+  100% { filter: drop-shadow(0 0 12px rgba(0,230,118,1)); fill-opacity: 0.9; }
+}
+@keyframes polyPulseLoser {
+  0% { filter: drop-shadow(0 0 2px rgba(30,136,229,0.5)); fill-opacity: 0.6; }
+  100% { filter: drop-shadow(0 0 12px rgba(33,150,243,1)); fill-opacity: 0.9; }
+}
+
+/* ✨ NEW FEATURE: TOP MOVERS LABEL ANIMATION ✨ */
+.top-mover-gainer {
+  animation: labelPulseGainer 1.5s infinite alternate ease-in-out;
+  background: rgba(255,255,255,0.85);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,200,83,0.4);
+}
+.top-mover-loser {
+  animation: labelPulseLoser 1.5s infinite alternate ease-in-out;
+  background: rgba(255,255,255,0.85);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(30,136,229,0.4);
+}
+@keyframes labelPulseGainer {
+  0% { transform: scale(1); box-shadow: 0 0 4px rgba(0,200,83,0.3); }
+  100% { transform: scale(1.15); box-shadow: 0 0 14px rgba(0,200,83,0.8); }
+}
+@keyframes labelPulseLoser {
+  0% { transform: scale(1); box-shadow: 0 0 4px rgba(30,136,229,0.3); }
+  100% { transform: scale(1.15); box-shadow: 0 0 14px rgba(30,136,229,0.8); }
+}
+</style>
+</head>
+
+<body>
+<div id="toggleBtn">⬅</div>
+<div class="panel" id="panel">
+  <div class="panel-handle"></div>
+  <b>🇮🇳 Delimitation Reality Dashboard</b>
+
+  <div class="row">
+    <select id="mode" onchange="updateMap(true)">
+      <option value="current">current model (1971 census)</option>
+      <option value="uniform" selected>Uniform model (55% proportionate increase from 1971 census)</option>
+      <option value="y2011">2011 Census</option>
+      <option value="y2026">2026 Projection</option>
+    </select>
+  </div>
+
+  <div class="row small">Language</div>
+  <div class="row">
+    <select id="lang" onchange="setLang(this.value)">
+      <option value="en">English</option>
+      <option value="te">తెలుగు</option>
+    </select>
+  </div>
+
+  <hr><div id="totals"></div><div id="modelName" class="small"></div>
+  <hr><b id="shareTitle">📊 Share</b><div id="share" class="small"></div>
+  <hr><b id="voteTitle">⚖️ Vote Weight</b><div id="vote" class="small"></div>
+  <hr><b id="insightsTitle">🔥 Key Insights</b><div id="insights" class="small"></div>
+  <div id="topMoversBox">
+    <hr><b id="topMoversTitle">🏆 Top Movers</b><div id="topMovers" class="small"></div>
+  </div>
+  <hr><b id="validationTitle">🧪 Validation</b><div id="validation" class="small"></div>
+  <hr><div class="legend" id="legendBox"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+// ================== NORMALIZATION ==================
+function normalizeName(name){
+  let n = (name||"").trim();
+  const map = {
+    "Jammu & Kashmir":"Jammu and Kashmir", "NCT of Delhi":"Delhi",
+    "Andaman & Nicobar Islands":"Andaman and Nicobar Islands",
+    "Andaman & Nicobar Island":"Andaman and Nicobar Islands", 
+    "Andaman & Nicobar":"Andaman and Nicobar Islands",
+    "Andaman":"Andaman and Nicobar Islands",
+    "Nicobar":"Andaman and Nicobar Islands",
+    "Dadra & Nagar Haveli and Daman & Diu":"Dadra and Nagar Haveli and Daman and Diu",
+    "Daman and Diu":"Dadra and Nagar Haveli and Daman and Diu",
+    "Daman & Diu":"Dadra and Nagar Haveli and Daman and Diu",
+    "Dadra and Nagar Haveli":"Dadra and Nagar Haveli and Daman and Diu",
+    "Dadra & Nagar Haveli":"Dadra and Nagar Haveli and Daman and Diu",
+    "Orissa":"Odisha", "Uttaranchal":"Uttarakhand"
+  };
+  return map[n] || n;
+}
+
+// ================== LANGUAGE ==================
+const TELUGU = {
+  "Uttar Pradesh":"ఉత్తర ప్రదేశ్","Maharashtra":"మహారాష్ట్ర","West Bengal":"పశ్చిమ బెంగాల్",
+  "Bihar":"బీహార్","Tamil Nadu":"తమిళనాడు","Madhya Pradesh":"మధ్యప్రదేశ్",
+  "Karnataka":"కర్ణాటక","Gujarat":"గుజరాత్","Andhra Pradesh":"ఆంధ్ర ప్రదేశ్",
+  "Telangana":"తెలంగాణ","Kerala":"కేరళ","Odisha":"ఒడిశా","Rajasthan":"రాజస్థాన్",
+  "Punjab":"పంజాబ్","Haryana":"హర్యానా","Delhi":"దిల్లీ","Jammu and Kashmir":"జమ్మూ కాశ్మీర్",
+  "Ladakh":"లడఖ్","Assam":"అస్సాం","Jharkhand":"ఝార్ఖండ్","Chhattisgarh":"ఛత్తీస్‌గఢ్",
+  "Goa":"గోవా","Tripura":"త్రిపుర","Meghalaya":"మేఘాలయ","Manipur":"మణిపూర్",
+  "Nagaland":"నాగాలాండ్","Arunachal Pradesh":"అరుణాచల్ ప్రదేశ్","Mizoram":"మిజోరం",
+  "Sikkim":"సిక్కిం","Puducherry":"పుదుచ్చేరి","Lakshadweep":"లక్షద్వీప్",
+  "Chandigarh":"చండీగఢ్","Andaman and Nicobar Islands":"అండమాన్ నికోబార్ దీవులు",
+  "Dadra and Nagar Haveli and Daman and Diu":"దాద్రా నాగర్ హవేలి & దమన్ దియు",
+  "Himachal Pradesh":"హిమాచల్ ప్రదేశ్", "Uttarakhand":"ఉత్తరాఖండ్"
+};
+
+function t(name){
+  let lang = document.getElementById("lang")?.value || "en";
+  if(lang === "te") return TELUGU[name] || name;
+  return name;
+}
+
+const UI = {
+  en: {
+    total:"Total", model:"Model", gain:"Biggest Gain", loss:"Biggest Loss",
+    gainers:"Top Gainers", losers:"Top Losers", shareTitle:"Share (South vs North)",
+    standard:"Standard (incl Delhi & J&K)", sensitivity:"Sensitivity (excl Delhi & J&K)",
+    south:"South", north:"North", vote:"Vote Weight (people per MP)", validation:"Validation",
+    seats:"Seats", modelLabel:"Model", deltaCurrent:"Δ vs Current", deltaUniform:"Δ vs Uniform",
+    share:"Share", shareDelta:"Share Δ", legendGain:"Border = Gain vs baseline",
+    legendLoss:"Border = Loss vs baseline", legendFill:"Fill = State identity",
+    legendBase:"Baseline: Uniform vs Current | 2011/2026 vs Uniform", none:"None"
+  },
+  te: {
+    total:"మొత్తం", model:"మోడల్", gain:"అత్యధిక లాభం", loss:"అత్యధిక నష్టం",
+    gainers:"లాభపడిన రాష్ట్రాలు", losers:"నష్టపోయిన రాష్ట్రాలు", shareTitle:"వాటా (దక్షిణం vs ఉత్తరం)",
+    standard:"సాధారణ (దిల్లీ & జమ్మూ కాశ్మీర్‌తో)", sensitivity:"సెన్సిటివిటీ (దిల్లీ & జమ్మూ కాశ్మీర్ లేకుండా)",
+    south:"దక్షిణం", north:"ఉత్తరం", vote:"ఓటు బరువు (ప్రతి ఎంపీకి జనాభా)", validation:"ధృవీకరణ",
+    seats:"సీట్లు", modelLabel:"మోడల్", deltaCurrent:"ప్రస్తుతంతో మార్పు", deltaUniform:"సమాన పంపిణీతో మార్పు",
+    share:"వాటా", shareDelta:"వాటా మార్పు", legendGain:"సరిహద్దు = లాభం", legendLoss:"సరిహద్దు = నష్టం",
+    legendFill:"రంగు = రాష్ట్రం", legendBase:"ఆధారం: సమాన పంపిణీ vs ప్రస్తుత", none:"ఏదీ లేదు"
+  }
+};
+
+function ui(){
+  let lang = document.getElementById("lang")?.value || "en";
+  return UI[lang];
+}
+
+// ================== COLOR ==================
+function getColor(state){
+ let hash = 0;
+ for(let i=0;i<state.length;i++){ hash = state.charCodeAt(i) + ((hash<<5)-hash); }
+ let hue = (hash % 360 + 360) % 360;
+ return `hsl(${hue},45%,70%)`;
+}
+
+// ================== DATA ==================
+const CURRENT = {
+"Uttar Pradesh":80,"Maharashtra":48,"West Bengal":42,"Bihar":40,
+"Tamil Nadu":39,"Madhya Pradesh":29,"Karnataka":28,"Gujarat":26,
+"Andhra Pradesh":25,"Rajasthan":25,"Odisha":21,"Kerala":20,
+"Telangana":17,"Assam":14,"Jharkhand":14,"Punjab":13,"Chhattisgarh":11,
+"Haryana":10,"Delhi":7,"Jammu and Kashmir":5,
+"Himachal Pradesh":4,"Uttarakhand":5,"Goa":2,"Tripura":2,
+"Meghalaya":2,"Manipur":2,"Nagaland":1,"Arunachal Pradesh":2,
+"Mizoram":1,"Sikkim":1,"Andaman and Nicobar Islands":1,"Chandigarh":1,
+"Ladakh":1,"Lakshadweep":1,"Puducherry":1,"Dadra and Nagar Haveli and Daman and Diu":2
+};
+
+const POP_2011 = {
+"Uttar Pradesh":199812341,"Maharashtra":112374333,"Bihar":104099452,
+"West Bengal":91276115,"Madhya Pradesh":72626809,"Tamil Nadu":72147030,
+"Rajasthan":68548437,"Karnataka":61095297,"Gujarat":60439692,
+"Andhra Pradesh":49577103,"Telangana":35193978,"Odisha":41974218,
+"Kerala":33406061,"Jharkhand":32988134,"Assam":31205576,
+"Punjab":27743338,"Chhattisgarh":25545198,"Haryana":25351462,
+"Himachal Pradesh":6864602,"Uttarakhand":10086292,"Goa":1458545,"Tripura":3673917,
+"Meghalaya":2966889,"Manipur":2855794,"Nagaland":1978502,"Arunachal Pradesh":1383727,
+"Mizoram":1097206,"Sikkim":610577
+};
+
+const POP_UT = {
+  "Delhi":16787941, "Jammu and Kashmir":12541302, "Ladakh":274000,
+  "Chandigarh":1055450, "Puducherry":1247953, "Lakshadweep":64473,
+  "Andaman and Nicobar Islands":380581, "Dadra and Nagar Haveli and Daman and Diu":586956
+};
+
+const TOTAL_850 = 850;
+const UT_TOTAL = 35;
+const STATE_TOTAL = TOTAL_850 - UT_TOTAL;
+const SOUTH = ["Tamil Nadu","Kerala","Karnataka","Andhra Pradesh","Telangana"];
+const EXCLUDE_SENSITIVITY = ["Delhi","Jammu and Kashmir"];
+
+function allocate(pop,total){
+  let sum=Object.values(pop).reduce((a,b)=>a+b,0);
+  let base={},rem=[];
+  for(let s in pop){
+    let q=(pop[s]/sum)*total; base[s]=Math.floor(q); rem.push({s,frac:q-base[s]});
+  }
+  let left=total-Object.values(base).reduce((a,b)=>a+b,0);
+  rem.sort((a,b)=>b.frac-a.frac);
+  for(let i=0;i<left;i++) base[rem[i].s]++;
+  return base;
+}
+
+function allocateUTSeats(popUT, targetTotal) {
+  let base = {};
+  let rem = [];
+  let utList = Object.keys(popUT);
+  utList.forEach(s => base[s] = 1);
+
+  let assigned = utList.length; 
+  let extraSeats = targetTotal - assigned;
+  let totalUtPop = Object.values(popUT).reduce((a, b) => a + b, 0);
+  
+  utList.forEach(s => {
+    let share = (popUT[s] / totalUtPop) * extraSeats;
+    let floorShare = Math.floor(share);
+    base[s] += floorShare;
+    rem.push({ s, frac: share - floorShare });
+  });
+
+  let distributed = Object.values(base).reduce((a, b) => a + b, 0);
+  let needed = targetTotal - distributed;
+  
+  rem.sort((a, b) => b.frac - a.frac);
+  for (let i = 0; i < needed; i++) {
+    base[rem[i].s]++;
+  }
+  return base;
+}
+
+function buildUTModel(m){
+  if(m === "current") return allocateUTSeats(POP_UT, 19);
+  return allocateUTSeats(POP_UT, 35);
+}
+
+function project2026(){
+  let out={};
+  for(let s in POP_2011){
+    let g=1.18; if(s==="Uttar Pradesh"||s==="Bihar") g=1.25; if(s==="Tamil Nadu"||s==="Kerala") g=1.08;
+    out[s]=Math.round(POP_2011[s]*g);
+  }
+  return out;
+}
+
+function mergeStatesWithUTs(stateModel, utModel){
+  let out = {};
+  for(let s in CURRENT){
+    if(stateModel && stateModel[s] !== undefined) out[s] = stateModel[s];
+    else if(utModel && utModel[s] !== undefined) out[s] = utModel[s];
+    else out[s] = CURRENT[s];
+  }
+  return out;
+}
+
+function computeShareExcludingDJK(data){
+  let total = 0; let south = 0;
+  for(let s in data){
+    if(EXCLUDE_SENSITIVITY.includes(s)) continue;
+    if(!(s in POP_2011)) continue;
+    total += data[s]; if(SOUTH.includes(s)) south += data[s];
+  }
+  return { south: (south/total*100), north: (100 - (south/total*100)) };
+}
+
+const MODEL_2011_STATES = allocate(POP_2011,STATE_TOTAL);
+const UT_2011 = buildUTModel("y2011");
+const MODEL_2011 = mergeStatesWithUTs(MODEL_2011_STATES, UT_2011);
+
+const POP_2026 = project2026();
+const MODEL_2026_STATES = allocate(POP_2026,STATE_TOTAL);
+const UT_2026 = buildUTModel("y2026");
+const MODEL_2026 = mergeStatesWithUTs(MODEL_2026_STATES, UT_2026);
+
+const CURRENT_STATES = {};
+for(let s in CURRENT){ if(s in POP_2011) CURRENT_STATES[s] = CURRENT[s]; }
+const UNIFORM_STATES = allocate(CURRENT_STATES, STATE_TOTAL);
+const UT_UNIFORM = buildUTModel("uniform");
+const UNIFORM = mergeStatesWithUTs(UNIFORM_STATES, UT_UNIFORM);
+
+// ================== MAP ==================
+const map = L.map('map',{zoomControl:true, attributionControl:false}).setView([22.5,80],5);
+window.map = map;
+
+window.addEventListener('resize', () => { if (window.map) window.map.invalidateSize(); });
+
+const indiaBounds = [[6,68],[37,98]];
+map.fitBounds(indiaBounds);
+map.setMinZoom(4); map.setMaxZoom(8);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:7}).addTo(map);
+
+let geoLayer;
+let utLayer = L.layerGroup().addTo(map);
+let labelLayer = L.layerGroup().addTo(map);
+let labelTimer;
+
+const UT_BOX={
+"Delhi":[[28.4,76.9],[28.9,77.5]], "Chandigarh":[[30.6,76.7],[30.8,76.9]],
+"Puducherry":[[11.8,79.7],[12.0,80.0]], "Lakshadweep":[[10.4,72.5],[10.8,72.8]],
+"Ladakh":[[33.5,76],[35.5,79]], "Dadra and Nagar Haveli and Daman and Diu":[[20,72.8],[20.4,73.2]]
+};
+
+// Hardcoded precision centers for perfect alignment of all states (Bypassing auto bounding-box calculations)
+const LABEL_CENTERS = {
+  "Kerala": [10.5, 76.5], "Tamil Nadu": [11.0, 78.5],
+  "Karnataka": [14.5, 76.0], "Andhra Pradesh": [16.0, 79.5],
+  "Telangana": [17.5, 79.0], "Maharashtra": [19.0, 76.0],
+  "Odisha": [20.5, 84.5], "Gujarat": [22.8, 71.5],
+  "Madhya Pradesh": [23.5, 78.5], "Chhattisgarh": [21.0, 82.0],
+  "Jharkhand": [23.5, 85.5], "West Bengal": [23.5, 87.8],
+  "Bihar": [25.5, 85.5], "Uttar Pradesh": [27.0, 80.5],
+  "Rajasthan": [26.5, 73.5], "Haryana": [29.0, 76.0],
+  "Punjab": [30.5, 75.5], "Assam": [26.0, 92.5],
+  "Andaman and Nicobar Islands": [11.5, 92.7],
+  "Himachal Pradesh": [31.8, 77.2], "Uttarakhand": [30.0, 79.0],
+  "Goa": [15.3, 74.0], "Tripura": [23.8, 91.5],
+  "Meghalaya": [25.5, 91.0], "Manipur": [24.8, 93.9],
+  "Nagaland": [26.0, 94.2], "Arunachal Pradesh": [28.0, 94.5],
+  "Mizoram": [23.3, 92.8], "Sikkim": [27.5, 88.5],
+  "Jammu and Kashmir": [33.8, 74.8]
+};
+
+fetch('india_states.geojson').then(r=>r.json()).then(g=>{
+  let glowLayer = L.geoJSON(g,{ style:{color:"#2c3e50", weight:8, opacity:0.12, fillOpacity:0} }).addTo(map);
+  geoLayer = L.geoJSON(g,{
+    onEachFeature:(f,l)=>{
+      l.setStyle({color:"#333", weight:1, fillColor:"#ccc", fillOpacity:0.6});
+      l.on('mouseover', function(){ this.setStyle({weight:3}); });
+      l.on('mouseout', function(){ this.setStyle({weight:1}); });
+    }
+  }).addTo(map);
+  glowLayer.bringToBack();
+
+  document.getElementById("lang").value = detectLanguage();
+  updateDropdownLanguage();
+  updateMap(false);
+  map.on("zoomend", function(){ updateMap(false); });
+});
+
+function getData(m){
+  if(m==="current") return CURRENT; if(m==="uniform") return UNIFORM;
+  if(m==="y2011") return MODEL_2011; return MODEL_2026;
+}
+
+function getLabel(m){
+  return m==="current"?"current model (1971 census)": m==="uniform"?"Uniform model (55% proportionate increase from 1971 census)": m==="y2011"?"2011 Census":"2026 Projection";
+}
+
+function getLabelTelugu(m){
+  return m==="current"?"ప్రస్తుతం (1971 జనాభా లెక్కలు)": m==="uniform"?"సమాన పంపిణీ (1971 జనాభా లెక్కల నుండి 55% దామాషా పెంపు)": m==="y2011"?"2011 లెక్కలు":"2026 అంచనా";
+}
+
+function updateDropdownLanguage(){
+  const modeSelect = document.getElementById("mode");
+  const lang = document.getElementById("lang").value;
+  const opts = modeSelect.options;
+  for(let i=0; i<opts.length; i++) {
+     let m = opts[i].value;
+     opts[i].text = lang === "te" ? getLabelTelugu(m) : getLabel(m);
+  }
+}
+
+function setLang(lang){
+  localStorage.setItem("lang", lang);
+  document.getElementById("lang").value = lang;
+  updateDropdownLanguage();
+  updateMap(false);
+}
+
+function formatTop(list, color){
+  return list.map((x,i)=>{
+    let badge = "";
+    if(i === 0) badge = "🥇"; else if(i === 1) badge = "🥈"; else if(i === 2) badge = "🥉";
+    let arrow = x.diff > 0 ? "▲" : x.diff < 0 ? "▼" : "•";
+    let prefix = badge ? `${badge} ${i+1}.` : `${i+1}.`;
+    return `${prefix} ${t(x.s)} <span style="color:${color}; font-weight:600">${arrow} ${x.diff>=0?"+":""}${Math.abs(x.diff)}</span>`;
+  }).join("<br>");
+}
+
+function detectLanguage(){
+  let saved = localStorage.getItem("lang");
+  if(saved) return saved;
+  let browserLang = navigator.language || navigator.userLanguage;
+  if(browserLang && browserLang.toLowerCase().startsWith("te")) return "te";
+  return "en";
+}
+
+function getSym(v) { return v > 0 ? "🔺" : v < 0 ? "🔻" : "➖"; }
+function getSign(v) { return v > 0 ? "+" : ""; }
+
+function addLabels(data){
+  labelLayer.clearLayers();
+  let zoom = map.getZoom();
+  let seen = new Set(); 
+  let lang = document.getElementById("lang")?.value || "en";
+  let mode = document.getElementById("mode").value;
+
+  let topGainerSet = new Set(), topLoserSet = new Set(), diffMap = {};
+  if(mode !== "current") {
+    let diffs = [];
+    for(let s in data){
+      if(!(s in POP_2011)) continue;
+      let baseVal = (mode==="uniform") ? CURRENT[s] : UNIFORM[s];
+      let d = (data[s]||0) - (baseVal||0);
+      diffs.push({s: s, diff: d});
+      diffMap[s] = d;
+    }
+    diffs.filter(x => x.diff > 0).sort((a,b) => b.diff - a.diff).slice(0,3).forEach(x => topGainerSet.add(x.s));
+    diffs.filter(x => x.diff < 0).sort((a,b) => a.diff - b.diff).slice(0,3).forEach(x => topLoserSet.add(x.s));
+  }
+
+  if(zoom >= 6){
+    for(let s in UT_BOX){
+      seen.add(s);
+      let bounds = UT_BOX[s];
+      let center = [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2];
+      let fontSize = zoom >= 6 ? "11px" : "9px";
+      let primary = lang === "te" ? t(s) : s;
+      let secondary = lang === "te" ? s : t(s);
+      let name = `${primary}<br><span style="font-size:10px; opacity:0.8">${secondary}</span>`;
+      let val = data[s] || 0;
+      let label = L.marker(center,{
+        interactive:false,
+        icon: L.divIcon({
+          className:"ut-label",
+          html: `<div style="text-align:center; font-weight:600; font-size:${fontSize}; color:#000; text-shadow:0 0 4px #fff;">${name}<br><b>${val}</b></div>`
+        })
+      });
+      labelLayer.addLayer(label);
+    }
+  }
+
+  geoLayer.eachLayer(layer=>{
+    let raw = layer.feature.properties.ST_NM || layer.feature.properties.NAME_1;
+    // Hide explicitly to prevent processing legacy duplicates
+    if (raw === "Daman and Diu" || raw === "Dadra and Nagar Haveli") return;
+    
+    let s = normalizeName(raw);
+    if(seen.has(s)) return; 
+    seen.add(s);
+    let center;
+    if(LABEL_CENTERS[s]) { center = L.latLng(LABEL_CENTERS[s][0], LABEL_CENTERS[s][1]); } 
+    else { try { center = layer.getBounds().getCenter(); } catch(e) { return; } }
+    if(!center) return;
+    
+    let fontSize = zoom >= 6 ? "12px" : "10px";
+    let val = data[s] || 0;
+    let primary = lang === "te" ? t(s) : s;
+    let secondary = lang === "te" ? s : t(s);
+    let nameHtml = zoom < 6 ? primary : `${primary}<br><span style="font-size:10px; opacity:0.8">${secondary}</span>`;
+    
+    let isGainer = topGainerSet.has(s);
+    let isLoser = topLoserSet.has(s);
+    let wrapperClass = isGainer ? "top-mover-gainer" : isLoser ? "top-mover-loser" : "";
+    let metricHtml = "";
+
+    if (isGainer || isLoser) {
+        let d = diffMap[s];
+        let sym = getSym(d);
+        let sign = getSign(d);
+        let color = d > 0 ? "#00c853" : "#1e88e5";
+        metricHtml = `<div style="margin-top:3px; font-size:11px; font-weight:bold; color:${color}; background:#fff; padding:1px 5px; border-radius:4px; display:inline-block; border:1px solid ${color}40; box-shadow:0 1px 3px rgba(0,0,0,0.1);">${sym} ${sign}${Math.abs(d)}</div>`;
+    }
+
+    let label = L.marker(center,{
+      interactive:false,
+      icon: L.divIcon({
+        className:"state-label",
+        html: `<div class="${wrapperClass}" style="text-align:center; font-weight:600; font-size:${fontSize}; color:#111; text-shadow:0 0 4px rgba(255,255,255,0.9); line-height:1.2; display:inline-block; transition:all 0.3s;">
+                 ${nameHtml}<br><b>${val}</b><br>${metricHtml}
+               </div>`
+      })
+    });
+    labelLayer.addLayer(label);
+  });
+}
+
+function updateMap(flag){
+  if(window._updating) return;
+  window._updating = true;
+  setTimeout(()=> window._updating = false, 0);
+
+  let mode = document.getElementById("mode").value;
+  let data = getData(mode);
+  let lang = document.getElementById("lang")?.value || "en";
+  let u = ui();
+
+  let diffs = [];
+  for(let s in data){
+    if(!(s in POP_2011)) continue; 
+    let baseVal = (mode==="uniform") ? CURRENT[s] : UNIFORM[s];
+    let d = (data[s]||0) - (baseVal||0);
+    diffs.push({s: s, diff: d});
+  }
+  
+  let topGainers = diffs.filter(x => x.diff > 0).sort((a,b) => b.diff - a.diff).slice(0,3);
+  let topLosers = diffs.filter(x => x.diff < 0).sort((a,b) => a.diff - b.diff).slice(0,3);
+  
+  let biggestGain = topGainers.length > 0 ? topGainers[0].s : u.none;
+  let biggestLoss = topLosers.length > 0 ? topLosers[0].s : u.none;
+
+  geoLayer.eachLayer(layer=>{
+    let raw = layer.feature.properties.ST_NM || layer.feature.properties.NAME_1;
+    
+    // Explicitly hide legacy disconnected polygons to prevent map artifacts and duplication
+    if (raw === "Daman and Diu" || raw === "Dadra and Nagar Haveli") {
+        layer.setStyle({opacity: 0, fillOpacity: 0, weight: 0, stroke: false});
+        if(layer.getTooltip()) layer.unbindTooltip();
+        return;
+    }
+
+    let s = normalizeName(raw);
+    let val = data[s] || 0;
+    let diff = null, shareDelta = null;
+
+    let isGainer = topGainers.find(x => x.s === s);
+    let isLoser = topLosers.find(x => x.s === s);
+
+    if(mode==="uniform") diff = val-(CURRENT[s]||0);
+    else if(mode==="y2011" || mode==="y2026"){
+      diff = val-(UNIFORM[s]||0);
+      shareDelta = ((val/850)-(UNIFORM[s]/850))*100;
+    }
+
+    let dynamicBorder = diff > 0 ? "#00c853" : diff < 0 ? "#1e88e5" : "#999";
+    
+    let polyClass = isGainer ? "poly-gainer" : isLoser ? "poly-loser" : "";
+    layer.setStyle({fillColor:getColor(s), fillOpacity:0.8, color:dynamicBorder, weight:3, className: polyClass});
+    
+    if(isGainer || isLoser) { layer.bringToFront(); }
+
+    let modelLabelText = lang==="te" ? getLabelTelugu(mode) : getLabel(mode);
+    let tip = `<b>${lang==="te" ? t(s) : s}</b><br>${u.seats}: ${val}<br>${u.modelLabel}: ${modelLabelText}`;
+    
+    if(mode==="uniform") {
+        let labelC = getSym(diff) + " " + u.deltaCurrent.replace('Δ', '').trim();
+        tip += `<br>${labelC}: ${getSign(diff)}${diff}`;
+    }
+    else if(mode==="y2011" || mode==="y2026"){
+        let labelU = getSym(diff) + " " + u.deltaUniform.replace('Δ', '').trim();
+        let labelS = getSym(shareDelta) + " " + u.shareDelta.replace('Δ', '').trim();
+        
+        tip += `<br>${labelU}: ${getSign(diff)}${diff}`;
+        tip += `<br>${u.share}: ${(val/850*100).toFixed(2)}%`;
+        tip += `<br>${labelS}: ${getSign(shareDelta)}${shareDelta.toFixed(2)}%`;
+    }
+    layer.bindTooltip(tip,{sticky:true});
+  });
+
+  utLayer.clearLayers();
+  for(let s in UT_BOX){
+    let val = data[s] || 0;
+    let rect = L.rectangle(UT_BOX[s],{ color:"#333", weight:2, fillColor:getColor(s), fillOpacity:0.8 }).addTo(utLayer);
+    rect.bindTooltip(`<b>${lang === "te" ? t(s) : s}</b><br>${u.seats}: ${val}`,{sticky:true});
+  }
+
+  clearTimeout(labelTimer);
+  labelTimer = setTimeout(()=>{ addLabels(data); }, 120);
+
+  let total = (mode==="current")?543:850;
+  document.body.classList.remove("lang-te");
+  if(lang === "te") document.body.classList.add("lang-te");
+
+  document.getElementById("insightsTitle").innerText = "🔥 " + u.gain;
+  document.getElementById("topMoversTitle").innerText = "🏆 " + u.gainers;
+  document.getElementById("shareTitle").innerHTML = "📊 " + u.shareTitle;
+  document.getElementById("voteTitle").innerHTML = "⚖️ " + u.vote;
+  document.getElementById("validationTitle").innerHTML = "🧪 " + u.validation;
+  document.getElementById("legendBox").innerHTML = `<div>🟢 ${u.legendGain}</div><div>🔵 ${u.legendLoss}</div><div>🎨 ${u.legendFill}</div><div class="small">${u.legendBase}</div>`;
+  document.getElementById("totals").innerHTML = `<b>${u.total}:</b> ${total}`;
+  document.getElementById("modelName").innerHTML = `<b>${u.model}:</b> ${lang==="te" ? getLabelTelugu(mode) : getLabel(mode)}`;
+  
+  let printGain = biggestGain === u.none ? u.none : t(biggestGain);
+  let printLoss = biggestLoss === u.none ? u.none : t(biggestLoss);
+  document.getElementById("insights").innerHTML = `${u.gain}: <span class="badge">${printGain}</span><br>${u.loss}: <span class="badge">${printLoss}</span>`;
+
+  if(mode !== "current") {
+    document.getElementById("topMoversBox").style.display = "block";
+    let moversHtml = "";
+    if(topGainers.length > 0) {
+       moversHtml += "<b>" + u.gainers + "</b><br>" + formatTop(topGainers, "#00c853");
+    }
+    if(topLosers.length > 0) {
+       if(topGainers.length > 0) moversHtml += "<hr>";
+       moversHtml += "<b>" + u.losers + "</b><br>" + formatTop(topLosers, "#1e88e5");
+    }
+    document.getElementById("topMovers").innerHTML = moversHtml;
+  } else {
+    document.getElementById("topMoversBox").style.display = "none";
+  }
+
+  let south = 0; let sum = 0;
+  for(let s in data){ if(!(s in POP_2011)) continue; sum+=data[s]; if(SOUTH.includes(s)) south+=data[s]; }
+  let share = (south/sum*100);
+  let sens = computeShareExcludingDJK(data);
+
+  document.getElementById("share").innerHTML = "<b>" + u.standard + "</b><br>" + u.south + ": " + share.toFixed(1) + "%<br>" + u.north + ": " + (100-share).toFixed(1) + "%<hr>" + "<b>" + u.sensitivity + "</b><br>" + u.south + ": " + sens.south.toFixed(1) + "%<br>" + u.north + ": " + sens.north.toFixed(1) + "%";
+
+  let up = Math.round(project2026()["Uttar Pradesh"]/(data["Uttar Pradesh"]||1));
+  let kl = Math.round(project2026()["Kerala"]/(data["Kerala"]||1));
+  document.getElementById("vote").innerHTML = "<b>" + u.vote + "</b><br>" + "UP MP ≈ " + up.toLocaleString() + "<br>" + "Kerala MP ≈ " + kl.toLocaleString();
+
+  let check = 0;
+  for(let s in data) check += data[s];
+  let expected = (mode==="current") ? 543 : 850;
+  document.getElementById("validation").innerHTML = u.validation + ": " + check + " / " + expected + (check===expected ? " ✔" : " ❌");
+} 
+
+function initDragPanel(){
+  const panel = document.getElementById("panel");
+  if(!panel) return;
+  let startY = 0; let currentY = 0; let isDragging = false;
+  let panelHeight = window.innerHeight * 0.75;
+  let peek = 80; 
+  let collapsed = panelHeight - peek; 
+  let expanded = 0;
+  let currentTranslate = collapsed;
+  function setTranslate(y){ panel.style.transform = `translateY(${y}px)`; }
+  let dragTarget = document.createElement("div");
+  dragTarget.style.position = "absolute"; dragTarget.style.top = "0"; dragTarget.style.left = "0";
+  dragTarget.style.width = "100%"; dragTarget.style.height = "60px"; dragTarget.style.zIndex = "10";
+  panel.appendChild(dragTarget);
+  dragTarget.addEventListener("touchstart", (e)=>{
+    if(panel.scrollTop > 5) return;
+    isDragging = true; startY = e.touches[0].clientY; panel.style.transition = "none"; 
+  }, {passive: true});
+  window.addEventListener("touchmove", (e)=>{
+    if(!isDragging) return;
+    currentY = e.touches[0].clientY;
+    let next = currentTranslate + (currentY - startY);
+    if(next < expanded) next = expanded; if(next > collapsed) next = collapsed;
+    setTranslate(next);
+  }, {passive: false});
+  window.addEventListener("touchend", (e)=>{
+    if(!isDragging) return; isDragging = false; panel.style.transition = "transform 0.3s ease";
+    let snap = (currentTranslate + (currentY - startY) > collapsed / 2) ? collapsed : expanded;
+    currentTranslate = snap; setTranslate(snap);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+  const btn = document.getElementById("toggleBtn");
+  if(!btn) return;
+  btn.onclick = function(){
+    if(window.innerWidth < 768) return; 
+    document.body.classList.toggle('panel-collapsed');
+    btn.innerHTML = document.body.classList.contains('panel-collapsed') ? "➡" : "⬅";
+    setTimeout(()=>{ if(window.map) window.map.invalidateSize({animate:true}); }, 350);
+  };
+  if(window.innerWidth < 768) initDragPanel();
+});
+</script>
+</body>
+</html>
